@@ -171,6 +171,7 @@ label{font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px}
   </div>
   <div class="editor-content">
     <div class="form-group"><label>Workshop title</label><input type="text" id="ws-title" placeholder="e.g. Leadership Essentials – April 2026"></div>
+    <div class="form-group"><label>Part label <span class="optional-tag">(shown on dashboard card, e.g. Part 1, Part 2, Session A)</span></label><input type="text" id="ws-part" placeholder="e.g. Part 1"></div>
     <div class="form-group">
       <label>Company logo <span class="optional-tag">(upload file)</span></label>
       <div class="logo-upload-area" onclick="document.getElementById('logo-file').click()">
@@ -373,6 +374,7 @@ async function renderDashboard(){
     var a=aMap[ws.id]||{views:0,downloads:0,stars:0};
     var shareUrl=baseUrl+'?ws='+ws.id;
     return '<div class="workshop-card">'+
+      +(ws.part_label?'<div style="display:inline-block;font-size:11px;font-weight:700;background:#c6252f;color:#fff;padding:3px 10px;border-radius:20px;margin-bottom:8px;letter-spacing:.3px">'+esc(ws.part_label)+'</div>':'')+
       '<h3>'+esc(ws.title)+'</h3>'+
       '<div class="meta">'+(ws.tips||[]).length+' tips &bull; '+new Date(ws.created_at).toLocaleDateString()+'</div>'+
       '<div class="stats"><span class="stat-pill">'+a.views+' views</span><span class="stat-pill">'+a.downloads+' DL</span><span class="stat-pill">'+a.stars+' stars</span></div>'+
@@ -408,6 +410,7 @@ function openEditor(id){
   var ws=id?workshops.find(function(w){return w.id===id;}):null;
   document.getElementById('editor-nav-title').textContent=id?'Edit workshop':'New workshop';
   document.getElementById('ws-title').value=(ws&&ws.title)||'';
+  document.getElementById('ws-part').value=(ws&&ws.part_label)||'';
   document.getElementById('ws-intro').value=(ws&&ws.intro)||'';
   document.getElementById('ws-cta-title').value=(ws&&ws.cta_title)||'';
   document.getElementById('ws-cta-sub').value=(ws&&ws.cta_sub)||'';
@@ -432,6 +435,7 @@ async function saveWorkshop(){
   err.style.display='none';
   var payload={
     title:title,
+    part_label:document.getElementById('ws-part').value.trim(),
     intro:document.getElementById('ws-intro').value.trim(),
     cta_title:document.getElementById('ws-cta-title').value.trim(),
     cta_sub:document.getElementById('ws-cta-sub').value.trim(),
@@ -453,7 +457,7 @@ async function saveWorkshop(){
 }
 
 function buildTempWs(){
-  return{id:null,title:document.getElementById('ws-title').value.trim(),intro:document.getElementById('ws-intro').value.trim(),cta_title:document.getElementById('ws-cta-title').value.trim(),cta_sub:document.getElementById('ws-cta-sub').value.trim(),thanks_title:document.getElementById('ws-thanks-title').value.trim(),thanks_sub:document.getElementById('ws-thanks-sub').value.trim(),logo_data:document.getElementById('ws-logo-data').value,tips:document.getElementById('ws-tips').value.split('\n').map(function(t){return t.trim();}).filter(Boolean)};
+  return{id:null,part_label:document.getElementById('ws-part').value.trim(),title:document.getElementById('ws-title').value.trim(),intro:document.getElementById('ws-intro').value.trim(),cta_title:document.getElementById('ws-cta-title').value.trim(),cta_sub:document.getElementById('ws-cta-sub').value.trim(),thanks_title:document.getElementById('ws-thanks-title').value.trim(),thanks_sub:document.getElementById('ws-thanks-sub').value.trim(),logo_data:document.getElementById('ws-logo-data').value,tips:document.getElementById('ws-tips').value.split('\n').map(function(t){return t.trim();}).filter(Boolean)};
 }
 
 function previewWorkshop(){
@@ -615,16 +619,34 @@ async function downloadPDF(starredOnly){
   doc.setDrawColor(220,220,220);doc.setLineWidth(0.4);doc.line(margin,divY,pageW-margin,divY);
   var y=divY+10;
   doc.setTextColor(30,30,30);
-  tips.forEach(function(tip,i){
+  // For "all tips" PDF, track original index to check starred status
+  var allTips=ws.tips||[];
+  var tipIndices=starredOnly?allTips.map(function(_,i){return i;}).filter(function(i){return starred[i];}):allTips.map(function(_,i){return i;});
+  tips.forEach(function(tip,n){
+    var origIndex=tipIndices[n];
+    var isStarred=starred[origIndex];
     if(y>272){doc.addPage();y=20;}
-    doc.setFillColor(248,242,242);doc.roundedRect(margin,y-5,cW,22,2,2,'F');
-    doc.setFillColor(198,37,47);doc.roundedRect(margin,y-5,8,22,1,1,'F');
+    // Row height depends on tip length
+    var lines=doc.splitTextToSize(tip,cW-20);
+    var rowH=Math.max(lines.length*6+8,18);
+    // Background
+    doc.setFillColor(isStarred?255:248,isStarred?248:242,isStarred?230:242);
+    doc.roundedRect(margin,y-5,cW,rowH,2,2,'F');
+    // Left badge — red for starred, grey for unstarred
+    doc.setFillColor(isStarred?198:180,isStarred?37:180,isStarred?47:180);
+    doc.roundedRect(margin,y-5,8,rowH,1,1,'F');
+    // Number
     doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
-    doc.text(String(i+1),margin+4,y+6,{align:'center'});
+    doc.text(String(n+1),margin+4,y+Math.min(rowH/2-1,5),{align:'center'});
+    // Star indicator for all-tips PDF
+    if(!starredOnly&&isStarred){
+      doc.setTextColor(198,37,47);doc.setFontSize(10);
+      doc.text('★',pageW-margin-4,y+Math.min(rowH/2-1,5),{align:'right'});
+    }
+    // Tip text
     doc.setTextColor(30,30,30);doc.setFont('helvetica','normal');doc.setFontSize(10);
-    var lines=doc.splitTextToSize(tip,cW-16);
     doc.text(lines,margin+12,y+5);
-    y+=Math.max(lines.length*6,10)+10;
+    y+=rowH+6;
   });
   if(participantName){doc.setFontSize(9);doc.setTextColor(160,160,160);doc.text('Prepared for: '+participantName,margin,290);}
   doc.setFontSize(9);doc.setTextColor(160,160,160);doc.text(ws.title,pageW-margin,290,{align:'right'});
