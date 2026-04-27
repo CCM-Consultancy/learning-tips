@@ -265,8 +265,7 @@ label{font-size:13px;font-weight:500;color:#555;display:block;margin-bottom:4px}
     <p class="summary-sub" id="s-sub"></p>
     <div id="starred-list"></div>
     <div class="summary-actions">
-      <button class="btn btn-primary" onclick="downloadPDF(false)">Download all tips (PDF)</button>
-      <button class="btn btn-white" onclick="downloadPDF(true)">Starred tips only</button>
+      <button class="btn btn-primary" onclick="downloadPDF()">Download my tips (PDF)</button>
       <button class="btn btn-white" onclick="restartTips()">Review again</button>
     </div>
     <div class="all-section" id="all-section"></div>
@@ -491,7 +490,6 @@ function startParticipantFlow(ws){
 }
 function buildSlides(ws){
   var s=[];
-  s.push({type:'intro',text:ws.intro||'Welcome to '+ws.title+'! Tap through your top takeaways and star the ones you\'ll try.'});
   (ws.tips||[]).forEach(function(t,i){s.push({type:'tip',index:i,text:t});});
   if(ws.cta_title)s.push({type:'cta',heading:ws.cta_title,sub:ws.cta_sub||''});
   s.push({type:'thanks',heading:ws.thanks_title||'Thank you for being here!',sub:ws.thanks_sub||'We hope today\'s session inspires real action. See you next time!'});
@@ -573,11 +571,11 @@ function restartTips(){
   currentSlideIndex=0;starred=new Array((currentWs.tips||[]).length).fill(false);
   renderSlide();showScreen('tips');
 }
-async function downloadPDF(starredOnly){
+async function downloadPDF(){
   var jsPDFObj=window.jspdf;
   var doc=new jsPDFObj.jsPDF({unit:'mm',format:'a4'});
   var ws=currentWs;
-  var tips=starredOnly?(ws.tips||[]).filter(function(_,i){return starred[i];}): (ws.tips||[]);
+  var tips=ws.tips||[];
   var margin=20,pageW=210,cW=pageW-margin*2;
   var headerBottomY=20;
   if(ws.logo_data){
@@ -588,13 +586,13 @@ async function downloadPDF(starredOnly){
   var titleLines=doc.splitTextToSize(ws.title,cW);
   doc.text(titleLines,margin,titleY);
   doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(120,120,120);
-  doc.text(starredOnly?'My starred tips':'All tips — '+new Date().toLocaleDateString(),margin,titleY+titleLines.length*6+2);
+  doc.text('All tips — '+new Date().toLocaleDateString(),margin,titleY+titleLines.length*6+2);
   var divY=titleY+titleLines.length*6+10;
   doc.setDrawColor(220,220,220);doc.setLineWidth(0.4);doc.line(margin,divY,pageW-margin,divY);
   var y=divY+10;
   doc.setTextColor(30,30,30);
   var allTips=ws.tips||[];
-  var tipIndices=starredOnly?allTips.map(function(_,i){return i;}).filter(function(i){return starred[i];}):allTips.map(function(_,i){return i;});
+  var tipIndices=allTips.map(function(_,i){return i;});
   tips.forEach(function(tip,n){
     var origIndex=tipIndices[n];
     var isStarred=starred[origIndex];
@@ -607,7 +605,7 @@ async function downloadPDF(starredOnly){
     doc.roundedRect(margin,y-5,8,rowH,1,1,'F');
     doc.setTextColor(255,255,255);doc.setFontSize(9);doc.setFont('helvetica','bold');
     doc.text(String(n+1),margin+4,y+Math.min(rowH/2-1,5),{align:'center'});
-    if(!starredOnly&&isStarred){
+    if(isStarred){
       doc.setTextColor(198,37,47);doc.setFontSize(10);
       doc.text('★',pageW-margin-4,y+Math.min(rowH/2-1,5),{align:'right'});
     }
